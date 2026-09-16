@@ -7,7 +7,15 @@ export type Jogo = {
   bloco_linhas: number
   bloco_colunas: number
   dificuldade: Dificuldade
+  dicas_restantes: number
   tabuleiro: number[][]
+}
+
+export type Dica = {
+  linha: number
+  coluna: number
+  numero: number
+  dicas_restantes: number
 }
 
 const API_URL = 'http://127.0.0.1:8000'
@@ -61,4 +69,27 @@ export async function verificarTabuleiro(
 
   const resultado = await tratarResposta<{ completo: boolean }>(resposta)
   return resultado.completo
+}
+
+export async function pedirDica(
+  jogoId: string,
+  tabuleiro: number[][],
+): Promise<Dica> {
+  const resposta = await fetch(`${API_URL}/dica`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jogo_id: jogoId, tabuleiro }),
+  })
+
+  return tratarResposta<Dica>(resposta)
+}
+
+export async function reiniciarDicas(jogoId: string): Promise<void> {
+  const resposta = await fetch(`${API_URL}/reiniciar-dicas`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jogo_id: jogoId }),
+  })
+
+  await tratarResposta<{ dicas_restantes: number }>(resposta)
 }

@@ -1,3 +1,4 @@
+import random
 from typing import Literal
 from uuid import uuid4
 
@@ -40,6 +41,10 @@ class Tabuleiro(BaseModel):
     tabuleiro: list[list[int]]
 
 
+class Partida(BaseModel):
+    jogo_id: str
+
+
 def validar_formato_tabuleiro(tabuleiro):
     tamanho = len(tabuleiro)
 
@@ -76,6 +81,7 @@ def novo_jogo(dados: NovoJogo):
     jogos[jogo_id] = {
         "tabuleiro_inicial": [linha.copy() for linha in tabuleiro],
         "solucao": solucao,
+        "dicas_usadas": set(),
     }
 
     return {
@@ -84,8 +90,51 @@ def novo_jogo(dados: NovoJogo):
         "bloco_linhas": bloco_linhas,
         "bloco_colunas": bloco_colunas,
         "dificuldade": dados.dificuldade,
+        "dicas_restantes": 3,
         "tabuleiro": tabuleiro,
     }
+
+
+@app.post("/dica")
+def dar_dica(dados: Tabuleiro):
+    jogo = buscar_jogo(dados.jogo_id)
+    solucao = jogo["solucao"]
+    tamanho = validar_formato_tabuleiro(dados.tabuleiro)
+
+    if tamanho != len(solucao):
+        raise HTTPException(status_code=400, detail="Tamanho do tabuleiro incorreto.")
+
+    if len(jogo["dicas_usadas"]) >= 3:
+        raise HTTPException(status_code=409, detail="Limite de dicas atingido.")
+
+    candidatas = [
+        (linha, coluna)
+        for linha in range(tamanho)
+        for coluna in range(tamanho)
+        if jogo["tabuleiro_inicial"][linha][coluna] == 0
+        and (linha, coluna) not in jogo["dicas_usadas"]
+        and dados.tabuleiro[linha][coluna] != solucao[linha][coluna]
+    ]
+
+    if not candidatas:
+        raise HTTPException(status_code=409, detail="Não há células para receber dica.")
+
+    linha, coluna = random.choice(candidatas)
+    jogo["dicas_usadas"].add((linha, coluna))
+
+    return {
+        "linha": linha,
+        "coluna": coluna,
+        "numero": solucao[linha][coluna],
+        "dicas_restantes": 3 - len(jogo["dicas_usadas"]),
+    }
+
+
+@app.post("/reiniciar-dicas")
+def reiniciar_dicas(dados: Partida):
+    jogo = buscar_jogo(dados.jogo_id)
+    jogo["dicas_usadas"].clear()
+    return {"dicas_restantes": 3}
 
 
 @app.post("/verificar-jogada")

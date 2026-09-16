@@ -3,6 +3,8 @@ import Content from '../../components/Content/Content'
 import Tabuleiro from '../../components/Tabuleiro/Tabuleiro'
 import {
   criarNovoJogo,
+  pedirDica,
+  reiniciarDicas,
   verificarJogada,
   verificarTabuleiro,
   type Dificuldade,
@@ -25,6 +27,7 @@ export default function Home() {
   const [finalizado, setFinalizado] = useState(false)
   const [perdeu, setPerdeu] = useState(false)
   const [limiteErros, setLimiteErros] = useState(3)
+  const [dicasRestantes, setDicasRestantes] = useState(3)
   const verificando = useRef(false)
   const versaoPartida = useRef(0)
   const classeSelecao =
@@ -50,6 +53,7 @@ export default function Home() {
       setFinalizado(false)
       setPerdeu(false)
       setLimiteErros(3)
+      setDicasRestantes(novoJogo.dicas_restantes)
       verificando.current = false
     } catch {
       if (versao !== versaoPartida.current) return
@@ -119,7 +123,10 @@ export default function Home() {
       setMensagem('Número correto!')
       const completo = tabuleiro.every((valores, indiceLinha) =>
         valores.every((valor, indiceColuna) =>
-          valor !== 0 && novasSituacoes[indiceLinha][indiceColuna] === true,
+          valor !== 0 && (
+            celulasFixas[indiceLinha][indiceColuna] ||
+            novasSituacoes[indiceLinha][indiceColuna] === true
+          ),
         ),
       )
 
@@ -152,14 +159,23 @@ export default function Home() {
     digitarNumero(linha, coluna, 0)
   }
 
-  function tentarDeNovo() {
+  async function tentarDeNovo() {
     if (!jogo) return
 
+    try {
+      await reiniciarDicas(jogo.jogo_id)
+    } catch {
+      setMensagem('Não foi possível reiniciar a partida. Verifique se a API está ligada.')
+      return
+    }
+
     setTabuleiro(jogo.tabuleiro.map((linha) => [...linha]))
+    setCelulasFixas(jogo.tabuleiro.map((linha) => linha.map((numero) => numero !== 0)))
     setSituacoes(jogo.tabuleiro.map((linha) => linha.map(() => null)))
     setCelulaSelecionada(null)
     setErros(0)
     setLimiteErros(3)
+    setDicasRestantes(3)
     setTempo(0)
     setFinalizado(false)
     setPerdeu(false)
@@ -171,6 +187,53 @@ export default function Home() {
     setFinalizado(false)
     setPerdeu(false)
     setMensagem('Você ganhou mais uma chance. Continue de onde parou!')
+  }
+
+  async function usarDica() {
+    if (!jogo || carregando || finalizado || dicasRestantes === 0 || verificando.current) return
+
+    verificando.current = true
+    const versao = versaoPartida.current
+
+    try {
+      const dica = await pedirDica(jogo.jogo_id, tabuleiro)
+      if (versao !== versaoPartida.current) return
+
+      const novoTabuleiro = tabuleiro.map((linha) => [...linha])
+      novoTabuleiro[dica.linha][dica.coluna] = dica.numero
+      setTabuleiro(novoTabuleiro)
+
+      const novasSituacoes = situacoes.map((linha) => [...linha])
+      novasSituacoes[dica.linha][dica.coluna] = true
+      setSituacoes(novasSituacoes)
+
+      const novasCelulasFixas = celulasFixas.map((linha) => [...linha])
+      novasCelulasFixas[dica.linha][dica.coluna] = true
+      setCelulasFixas(novasCelulasFixas)
+      setDicasRestantes(dica.dicas_restantes)
+      setCelulaSelecionada([dica.linha, dica.coluna])
+      setMensagem('Dica aplicada! O número revelado não pode ser alterado.')
+
+      const completo = novoTabuleiro.every((valores, indiceLinha) =>
+        valores.every((valor, indiceColuna) =>
+          valor !== 0 && (
+            novasCelulasFixas[indiceLinha][indiceColuna] ||
+            novasSituacoes[indiceLinha][indiceColuna] === true
+          ),
+        ),
+      )
+
+      if (completo && await verificarTabuleiro(jogo.jogo_id, novoTabuleiro)) {
+        if (versao !== versaoPartida.current) return
+        setFinalizado(true)
+        setMensagem('Parabéns! Você completou o Sudoku.')
+      }
+    } catch {
+      if (versao !== versaoPartida.current) return
+      setMensagem('Não foi possível obter a dica ou não há células disponíveis.')
+    } finally {
+      if (versao === versaoPartida.current) verificando.current = false
+    }
   }
 
   return (
@@ -253,7 +316,7 @@ export default function Home() {
 
             {perdeu && (
               <div className="mt-4 flex flex-wrap justify-center gap-3">
-                <button className={classeBotao} type="button" onClick={tentarDeNovo}>
+                <button className={classeBotao} type="button" onClick={() => void tentarDeNovo()}>
                   Tentar de novo
                 </button>
                 <button className={`${classeBotao} bg-primaria-clara`} type="button" onClick={adicionarVida}>
@@ -285,10 +348,10 @@ export default function Home() {
             <button
               className={classeBotao}
               type="button"
-              disabled
-              title="A dica será implementada na próxima etapa"
+              disabled={carregando || finalizado || dicasRestantes === 0 || !jogo}
+              onClick={() => void usarDica()}
             >
-              Dica
+              Dica ({dicasRestantes})
             </button>
           </aside>
       </section>
