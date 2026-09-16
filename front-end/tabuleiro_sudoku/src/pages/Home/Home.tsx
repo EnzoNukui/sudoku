@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
 import Content from '../../components/Content/Content'
-import Footer from '../../components/Footer/Footer'
-import Header from '../../components/Header/Header'
 import Tabuleiro from '../../components/Tabuleiro/Tabuleiro'
 import {
   criarNovoJogo,
@@ -12,15 +10,20 @@ import {
   type TamanhoSudoku,
 } from '../../services/sudokuApi'
 
-function Home() {
+export default function Home() {
   const [tamanho, setTamanho] = useState<TamanhoSudoku>(9)
   const [dificuldade, setDificuldade] = useState<Dificuldade>('facil')
   const [jogo, setJogo] = useState<Jogo | null>(null)
   const [tabuleiro, setTabuleiro] = useState<number[][]>([])
   const [celulasFixas, setCelulasFixas] = useState<boolean[][]>([])
+  const [situacoes, setSituacoes] = useState<(boolean | null)[][]>([])
   const [celulaSelecionada, setCelulaSelecionada] = useState<[number, number] | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [mensagem, setMensagem] = useState('')
+  const classeSelecao =
+    'rounded-jogo border border-borda bg-superficie px-3 py-2 text-texto outline-none transition-colors focus:border-borda-forte focus:ring-2 focus:ring-primaria-clara'
+  const classeBotao =
+    'min-h-12 rounded-jogo border border-borda bg-superficie px-4 py-3 font-medium text-texto transition-colors hover:bg-primaria-clara disabled:opacity-50'
 
   const carregarJogo = useCallback(async () => {
     try {
@@ -29,6 +32,9 @@ function Home() {
       setTabuleiro(novoJogo.tabuleiro.map((linha) => [...linha]))
       setCelulasFixas(
         novoJogo.tabuleiro.map((linha) => linha.map((numero) => numero !== 0)),
+      )
+      setSituacoes(
+        novoJogo.tabuleiro.map((linha) => linha.map(() => null)),
       )
     } catch {
       setJogo(null)
@@ -43,22 +49,8 @@ function Home() {
   }, [carregarJogo])
 
   async function digitarNumero(linha: number, coluna: number, numero: number) {
-    if (celulasFixas[linha]?.[coluna]) {
+    if (celulasFixas[linha]?.[coluna] || !jogo) {
       return
-    }
-
-    if (numero !== 0) {
-      try {
-        const valida = await verificarJogada(tabuleiro, linha, coluna, numero)
-
-        if (!valida) {
-          setMensagem('Esse número não pode ser colocado nessa posição.')
-          return
-        }
-      } catch {
-        setMensagem('Não foi possível verificar a jogada.')
-        return
-      }
     }
 
     const novoTabuleiro = tabuleiro.map((valores) => [...valores])
@@ -66,8 +58,25 @@ function Home() {
     setTabuleiro(novoTabuleiro)
     setMensagem('')
 
+    const novasSituacoes = situacoes.map((valores) => [...valores])
+
+    if (numero === 0) {
+      novasSituacoes[linha][coluna] = null
+      setSituacoes(novasSituacoes)
+      return
+    }
+
+    try {
+      const correta = await verificarJogada(jogo.jogo_id, linha, coluna, numero)
+      novasSituacoes[linha][coluna] = correta
+      setSituacoes(novasSituacoes)
+    } catch {
+      setMensagem('Não foi possível verificar a jogada.')
+      return
+    }
+
     if (novoTabuleiro.every((valores) => valores.every((valor) => valor !== 0))) {
-      const completo = await verificarTabuleiro(novoTabuleiro)
+      const completo = await verificarTabuleiro(jogo.jogo_id, novoTabuleiro)
       setMensagem(completo ? 'Parabéns! Você completou o Sudoku.' : 'Ainda existem erros no tabuleiro.')
     }
   }
@@ -89,14 +98,15 @@ function Home() {
   }
 
   return (
-    <div className="aplicacao">
-      <Header />
-
-      <Content>
-        <section className="configuracoes" aria-label="Configurações do jogo">
-          <label>
+    <Content>
+      <section
+        className="mb-6 flex flex-col justify-center gap-3 sm:flex-row sm:gap-6"
+        aria-label="Configurações do jogo"
+      >
+          <label className="flex items-center justify-between gap-2 font-bold sm:justify-start">
             Tamanho
             <select
+              className={classeSelecao}
               value={tamanho}
               onChange={(evento) => {
                 setCarregando(true)
@@ -111,9 +121,10 @@ function Home() {
             </select>
           </label>
 
-          <label>
+          <label className="flex items-center justify-between gap-2 font-bold sm:justify-start">
             Dificuldade
             <select
+              className={classeSelecao}
               value={dificuldade}
               onChange={(evento) => {
                 setCarregando(true)
@@ -127,16 +138,19 @@ function Home() {
               <option value="dificil">Difícil</option>
             </select>
           </label>
-        </section>
+      </section>
 
-        <section className="area-jogo">
-          <div className="area-tabuleiro">
-            {carregando && <p>Carregando tabuleiro...</p>}
+      <section className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_minmax(280px,620px)_minmax(0,1fr)]">
+          <div className="min-w-0 md:col-start-2">
+            {carregando && (
+              <p className="py-8 text-center text-texto-suave">Carregando tabuleiro...</p>
+            )}
 
             {!carregando && jogo && (
               <Tabuleiro
                 valores={tabuleiro}
                 celulasFixas={celulasFixas}
+                situacoes={situacoes}
                 blocoLinhas={jogo.bloco_linhas}
                 blocoColunas={jogo.bloco_colunas}
                 celulaSelecionada={celulaSelecionada}
@@ -145,11 +159,19 @@ function Home() {
               />
             )}
 
-            {mensagem && <p className="mensagem" role="status">{mensagem}</p>}
+            {mensagem && (
+              <p className="mt-3 min-h-6 text-center font-semibold text-primaria-escura" role="status">
+                {mensagem}
+              </p>
+            )}
           </div>
 
-          <aside className="controles" aria-label="Controles do jogo">
+          <aside
+            className="grid grid-cols-3 gap-3 md:col-start-3 md:w-full md:max-w-[170px] md:grid-cols-1"
+            aria-label="Controles do jogo"
+          >
             <button
+              className={`${classeBotao} bg-primaria-clara font-bold text-primaria-escura`}
               type="button"
               onClick={() => {
                 setCarregando(true)
@@ -160,19 +182,19 @@ function Home() {
             >
               Novo jogo
             </button>
-            <button type="button" onClick={apagarSelecionada}>
+            <button className={classeBotao} type="button" onClick={apagarSelecionada}>
               Apagar
             </button>
-            <button type="button" disabled title="A dica será implementada na próxima etapa">
+            <button
+              className={classeBotao}
+              type="button"
+              disabled
+              title="A dica será implementada na próxima etapa"
+            >
               Dica
             </button>
           </aside>
-        </section>
-      </Content>
-
-      <Footer />
-    </div>
+      </section>
+    </Content>
   )
 }
-
-export default Home

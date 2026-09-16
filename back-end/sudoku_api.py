@@ -1,18 +1,18 @@
 from typing import Literal
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from sudoku_logica import (
-    criar_jogo,
+    criar_jogo_com_solucao,
     obter_tamanho_bloco,
-    verificar_jogada,
-    verificar_tabuleiro_completo,
 )
 
 
 app = FastAPI(title="API do Sudoku")
+jogos = {}
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,13 +29,14 @@ class NovoJogo(BaseModel):
 
 
 class Jogada(BaseModel):
-    tabuleiro: list[list[int]]
+    jogo_id: str
     linha: int
     coluna: int
     numero: int
 
 
 class Tabuleiro(BaseModel):
+    jogo_id: str
     tabuleiro: list[list[int]]
 
 
@@ -52,6 +53,15 @@ def validar_formato_tabuleiro(tabuleiro):
     return tamanho
 
 
+def buscar_jogo(jogo_id):
+    jogo = jogos.get(jogo_id)
+
+    if jogo is None:
+        raise HTTPException(status_code=404, detail="Partida não encontrada.")
+
+    return jogo
+
+
 @app.get("/")
 def verificar_api():
     return {"mensagem": "API do Sudoku funcionando"}
@@ -59,10 +69,17 @@ def verificar_api():
 
 @app.post("/novo-jogo")
 def novo_jogo(dados: NovoJogo):
-    tabuleiro = criar_jogo(dados.tamanho, dados.dificuldade)
+    tabuleiro, solucao = criar_jogo_com_solucao(dados.tamanho, dados.dificuldade)
     bloco_linhas, bloco_colunas = obter_tamanho_bloco(dados.tamanho)
+    jogo_id = str(uuid4())
+
+    jogos[jogo_id] = {
+        "tabuleiro_inicial": [linha.copy() for linha in tabuleiro],
+        "solucao": solucao,
+    }
 
     return {
+        "jogo_id": jogo_id,
         "tamanho": dados.tamanho,
         "bloco_linhas": bloco_linhas,
         "bloco_colunas": bloco_colunas,
@@ -73,32 +90,26 @@ def novo_jogo(dados: NovoJogo):
 
 @app.post("/verificar-jogada")
 def validar_jogada(dados: Jogada):
-    tamanho = validar_formato_tabuleiro(dados.tabuleiro)
+    jogo = buscar_jogo(dados.jogo_id)
+    solucao = jogo["solucao"]
+    tamanho = len(solucao)
 
     if not (0 <= dados.linha < tamanho and 0 <= dados.coluna < tamanho):
         raise HTTPException(status_code=400, detail="Linha ou coluna fora do tabuleiro.")
 
-    tabuleiro = [linha.copy() for linha in dados.tabuleiro]
-    tabuleiro[dados.linha][dados.coluna] = 0
-    tamanho_bloco = obter_tamanho_bloco(tamanho)
+    if jogo["tabuleiro_inicial"][dados.linha][dados.coluna] != 0:
+        raise HTTPException(status_code=400, detail="Essa célula é fixa.")
 
-    valida = verificar_jogada(
-        tabuleiro,
-        dados.linha,
-        dados.coluna,
-        dados.numero,
-        tamanho_bloco,
-    )
+    correta = solucao[dados.linha][dados.coluna] == dados.numero
 
-    return {"valida": valida}
+    return {"correta": correta}
 
 
 @app.post("/verificar-tabuleiro")
 def validar_tabuleiro(dados: Tabuleiro):
-    tamanho = validar_formato_tabuleiro(dados.tabuleiro)
-    tamanho_bloco = obter_tamanho_bloco(tamanho)
-    tabuleiro = [linha.copy() for linha in dados.tabuleiro]
+    jogo = buscar_jogo(dados.jogo_id)
+    validar_formato_tabuleiro(dados.tabuleiro)
 
-    completo = verificar_tabuleiro_completo(tabuleiro, tamanho_bloco)
+    completo = dados.tabuleiro == jogo["solucao"]
 
     return {"completo": completo}

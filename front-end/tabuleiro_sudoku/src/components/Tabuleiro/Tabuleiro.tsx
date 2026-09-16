@@ -1,6 +1,7 @@
 type TabuleiroProps = {
   valores: number[][]
   celulasFixas: boolean[][]
+  situacoes: (boolean | null)[][]
   blocoLinhas: number
   blocoColunas: number
   celulaSelecionada: [number, number] | null
@@ -8,9 +9,10 @@ type TabuleiroProps = {
   aoDigitar: (linha: number, coluna: number, numero: number) => void
 }
 
-function Tabuleiro({
+export default function Tabuleiro({
   valores,
   celulasFixas,
+  situacoes,
   blocoLinhas,
   blocoColunas,
   celulaSelecionada,
@@ -21,25 +23,36 @@ function Tabuleiro({
 
   return (
     <div
-      className="tabuleiro"
+      className="grid aspect-square w-full max-w-[620px] border-[3px] border-primaria-escura bg-superficie shadow-painel"
       style={{ gridTemplateColumns: `repeat(${tamanho}, 1fr)` }}
       aria-label={`Tabuleiro de Sudoku ${tamanho} por ${tamanho}`}
     >
       {valores.map((linha, indiceLinha) =>
         linha.map((numero, indiceColuna) => {
           const fixa = celulasFixas[indiceLinha][indiceColuna]
+          const situacao = situacoes[indiceLinha]?.[indiceColuna]
           const selecionada =
             celulaSelecionada?.[0] === indiceLinha &&
             celulaSelecionada?.[1] === indiceColuna
+          const estadoVisual = fixa
+            ? 'bg-celula-fixa font-bold text-texto'
+            : situacao === true
+              ? 'bg-correta-fundo font-semibold text-correta'
+              : situacao === false
+                ? 'bg-errada-fundo font-semibold text-errada'
+                : selecionada
+                  ? 'bg-primaria-clara text-primaria'
+                  : 'bg-superficie text-primaria'
 
           const classes = [
-            'celula',
-            fixa ? 'celula--fixa' : '',
-            selecionada ? 'celula--selecionada' : '',
-            indiceLinha % blocoLinhas === 0 ? 'bloco--topo' : '',
-            indiceColuna % blocoColunas === 0 ? 'bloco--esquerda' : '',
-            (indiceLinha + 1) % blocoLinhas === 0 ? 'bloco--base' : '',
-            (indiceColuna + 1) % blocoColunas === 0 ? 'bloco--direita' : '',
+            'min-w-0 border border-borda text-center text-[clamp(1rem,4vw,2rem)] outline-none transition-colors focus:z-10',
+            estadoVisual,
+            indiceLinha !== 0 && indiceLinha % blocoLinhas === 0
+              ? 'border-t-[3px] border-t-primaria-escura'
+              : '',
+            indiceColuna !== 0 && indiceColuna % blocoColunas === 0
+              ? 'border-l-[3px] border-l-primaria-escura'
+              : '',
           ]
             .filter(Boolean)
             .join(' ')
@@ -75,5 +88,3 @@ function Tabuleiro({
     </div>
   )
 }
-
-export default Tabuleiro

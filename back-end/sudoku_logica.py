@@ -134,14 +134,20 @@ def obter_tamanho_bloco(tamanho):
 
 
 def criar_jogo(tamanho, dificuldade):
+    tabuleiro, solucao = criar_jogo_com_solucao(tamanho, dificuldade)
+    return tabuleiro
+
+
+def criar_jogo_com_solucao(tamanho, dificuldade):
     tamanho_bloco = obter_tamanho_bloco(tamanho)
     tabuleiro = criar_tabuleiro(tamanho)
     gerar_solucao(tabuleiro, tamanho_bloco)
+    solucao = copiar_tabuleiro(tabuleiro)
 
     quantidade = quantidade_por_dificuldade(tamanho, dificuldade)
     remover_numeros(tabuleiro, quantidade)
 
-    return tabuleiro
+    return tabuleiro, solucao
 
 
 def verificar_tabuleiro_completo(tabuleiro, tamanho_bloco):

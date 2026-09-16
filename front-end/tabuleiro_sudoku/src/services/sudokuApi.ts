@@ -2,6 +2,7 @@ export type TamanhoSudoku = 4 | 6 | 9
 export type Dificuldade = 'facil' | 'medio' | 'dificil'
 
 export type Jogo = {
+  jogo_id: string
   tamanho: TamanhoSudoku
   bloco_linhas: number
   bloco_colunas: number
@@ -33,7 +34,7 @@ export async function criarNovoJogo(
 }
 
 export async function verificarJogada(
-  tabuleiro: number[][],
+  jogoId: string,
   linha: number,
   coluna: number,
   numero: number,
@@ -41,18 +42,21 @@ export async function verificarJogada(
   const resposta = await fetch(`${API_URL}/verificar-jogada`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tabuleiro, linha, coluna, numero }),
+    body: JSON.stringify({ jogo_id: jogoId, linha, coluna, numero }),
   })
 
-  const resultado = await tratarResposta<{ valida: boolean }>(resposta)
-  return resultado.valida
+  const resultado = await tratarResposta<{ correta: boolean }>(resposta)
+  return resultado.correta
 }
 
-export async function verificarTabuleiro(tabuleiro: number[][]): Promise<boolean> {
+export async function verificarTabuleiro(
+  jogoId: string,
+  tabuleiro: number[][],
+): Promise<boolean> {
   const resposta = await fetch(`${API_URL}/verificar-tabuleiro`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tabuleiro }),
+    body: JSON.stringify({ jogo_id: jogoId, tabuleiro }),
   })
 
   const resultado = await tratarResposta<{ completo: boolean }>(resposta)
