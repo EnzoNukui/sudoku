@@ -2,22 +2,26 @@ type TabuleiroProps = {
   valores: number[][]
   celulasFixas: boolean[][]
   situacoes: (boolean | null)[][]
+  bloqueado: boolean
   blocoLinhas: number
   blocoColunas: number
   celulaSelecionada: [number, number] | null
   aoSelecionar: (linha: number, coluna: number) => void
   aoDigitar: (linha: number, coluna: number, numero: number) => void
+  aoConfirmar: (linha: number, coluna: number) => void
 }
 
 export default function Tabuleiro({
   valores,
   celulasFixas,
   situacoes,
+  bloqueado,
   blocoLinhas,
   blocoColunas,
   celulaSelecionada,
   aoSelecionar,
   aoDigitar,
+  aoConfirmar,
 }: TabuleiroProps) {
   const tamanho = valores.length
 
@@ -64,9 +68,21 @@ export default function Tabuleiro({
               inputMode="numeric"
               key={`${indiceLinha}-${indiceColuna}`}
               maxLength={1}
-              readOnly={fixa}
+              readOnly={fixa || bloqueado}
               value={numero === 0 ? '' : numero}
-              onFocus={() => aoSelecionar(indiceLinha, indiceColuna)}
+              onFocus={(evento) => {
+                aoSelecionar(indiceLinha, indiceColuna)
+                if (!fixa && !bloqueado) evento.target.select()
+              }}
+              onClick={(evento) => {
+                if (!fixa && !bloqueado) evento.currentTarget.select()
+              }}
+              onKeyDown={(evento) => {
+                if (evento.key === 'Enter' && !fixa && !bloqueado) {
+                  evento.preventDefault()
+                  aoConfirmar(indiceLinha, indiceColuna)
+                }
+              }}
               onChange={(evento) => {
                 const valor = evento.target.value
 

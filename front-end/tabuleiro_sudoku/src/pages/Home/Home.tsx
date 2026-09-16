@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Content from '../../components/Content/Content'
 import Tabuleiro from '../../components/Tabuleiro/Tabuleiro'
 import {
@@ -20,14 +20,23 @@ export default function Home() {
   const [celulaSelecionada, setCelulaSelecionada] = useState<[number, number] | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [mensagem, setMensagem] = useState('')
+  const [erros, setErros] = useState(0)
+  const [tempo, setTempo] = useState(0)
+  const [finalizado, setFinalizado] = useState(false)
+  const [perdeu, setPerdeu] = useState(false)
+  const [limiteErros, setLimiteErros] = useState(3)
+  const verificando = useRef(false)
+  const versaoPartida = useRef(0)
   const classeSelecao =
     'rounded-jogo border border-borda bg-superficie px-3 py-2 text-texto outline-none transition-colors focus:border-borda-forte focus:ring-2 focus:ring-primaria-clara'
   const classeBotao =
     'min-h-12 rounded-jogo border border-borda bg-superficie px-4 py-3 font-medium text-texto transition-colors hover:bg-primaria-clara disabled:opacity-50'
 
   const carregarJogo = useCallback(async () => {
+    const versao = ++versaoPartida.current
     try {
       const novoJogo = await criarNovoJogo(tamanho, dificuldade)
+      if (versao !== versaoPartida.current) return
       setJogo(novoJogo)
       setTabuleiro(novoJogo.tabuleiro.map((linha) => [...linha]))
       setCelulasFixas(
@@ -36,11 +45,18 @@ export default function Home() {
       setSituacoes(
         novoJogo.tabuleiro.map((linha) => linha.map(() => null)),
       )
+      setErros(0)
+      setTempo(0)
+      setFinalizado(false)
+      setPerdeu(false)
+      setLimiteErros(3)
+      verificando.current = false
     } catch {
+      if (versao !== versaoPartida.current) return
       setJogo(null)
       setMensagem('Não foi possível carregar o jogo. Verifique se a API está ligada.')
     } finally {
-      setCarregando(false)
+      if (versao === versaoPartida.current) setCarregando(false)
     }
   }, [tamanho, dificuldade])
 
@@ -48,8 +64,15 @@ export default function Home() {
     void carregarJogo()
   }, [carregarJogo])
 
-  async function digitarNumero(linha: number, coluna: number, numero: number) {
-    if (celulasFixas[linha]?.[coluna] || !jogo) {
+  useEffect(() => {
+    if (!jogo || carregando || finalizado) return
+
+    const intervalo = window.setInterval(() => setTempo((atual) => atual + 1), 1000)
+    return () => window.clearInterval(intervalo)
+  }, [jogo, carregando, finalizado])
+
+  function digitarNumero(linha: number, coluna: number, numero: number) {
+    if (celulasFixas[linha]?.[coluna] || !jogo || finalizado || verificando.current) {
       return
     }
 
@@ -59,25 +82,57 @@ export default function Home() {
     setMensagem('')
 
     const novasSituacoes = situacoes.map((valores) => [...valores])
+    novasSituacoes[linha][coluna] = null
+    setSituacoes(novasSituacoes)
+  }
 
-    if (numero === 0) {
-      novasSituacoes[linha][coluna] = null
-      setSituacoes(novasSituacoes)
-      return
-    }
+  async function confirmarNumero(linha: number, coluna: number) {
+    if (!jogo || finalizado || verificando.current || celulasFixas[linha]?.[coluna]) return
+
+    const numero = tabuleiro[linha][coluna]
+    if (numero === 0 || situacoes[linha][coluna] !== null) return
+
+    verificando.current = true
+    const versao = versaoPartida.current
 
     try {
       const correta = await verificarJogada(jogo.jogo_id, linha, coluna, numero)
+      if (versao !== versaoPartida.current) return
+
+      const novasSituacoes = situacoes.map((valores) => [...valores])
       novasSituacoes[linha][coluna] = correta
       setSituacoes(novasSituacoes)
-    } catch {
-      setMensagem('Não foi possível verificar a jogada.')
-      return
-    }
 
-    if (novoTabuleiro.every((valores) => valores.every((valor) => valor !== 0))) {
-      const completo = await verificarTabuleiro(jogo.jogo_id, novoTabuleiro)
-      setMensagem(completo ? 'Parabéns! Você completou o Sudoku.' : 'Ainda existem erros no tabuleiro.')
+      if (!correta) {
+        const totalErros = erros + 1
+        setErros(totalErros)
+        if (totalErros >= limiteErros) {
+          setFinalizado(true)
+          setPerdeu(true)
+          setMensagem(`Você atingiu o limite de ${limiteErros} erros.`)
+        } else {
+          setMensagem('Número incorreto. Corrija a célula e pressione Enter novamente.')
+        }
+        return
+      }
+
+      setMensagem('Número correto!')
+      const completo = tabuleiro.every((valores, indiceLinha) =>
+        valores.every((valor, indiceColuna) =>
+          valor !== 0 && novasSituacoes[indiceLinha][indiceColuna] === true,
+        ),
+      )
+
+      if (completo && await verificarTabuleiro(jogo.jogo_id, tabuleiro)) {
+        if (versao !== versaoPartida.current) return
+        setFinalizado(true)
+        setMensagem('Parabéns! Você completou o Sudoku.')
+      }
+    } catch {
+      if (versao !== versaoPartida.current) return
+      setMensagem('Não foi possível verificar a jogada.')
+    } finally {
+      if (versao === versaoPartida.current) verificando.current = false
     }
   }
 
@@ -94,7 +149,28 @@ export default function Home() {
       return
     }
 
-    void digitarNumero(linha, coluna, 0)
+    digitarNumero(linha, coluna, 0)
+  }
+
+  function tentarDeNovo() {
+    if (!jogo) return
+
+    setTabuleiro(jogo.tabuleiro.map((linha) => [...linha]))
+    setSituacoes(jogo.tabuleiro.map((linha) => linha.map(() => null)))
+    setCelulaSelecionada(null)
+    setErros(0)
+    setLimiteErros(3)
+    setTempo(0)
+    setFinalizado(false)
+    setPerdeu(false)
+    setMensagem('Boa sorte! Tente resolver o mesmo tabuleiro novamente.')
+  }
+
+  function adicionarVida() {
+    setLimiteErros((atual) => atual + 1)
+    setFinalizado(false)
+    setPerdeu(false)
+    setMensagem('Você ganhou mais uma chance. Continue de onde parou!')
   }
 
   return (
@@ -140,6 +216,14 @@ export default function Home() {
           </label>
       </section>
 
+      <div className="mb-4 text-center">
+        <p className="text-sm text-texto-suave">Digite um número e pressione Enter para confirmar.</p>
+        <div className="mt-2 flex justify-center gap-6 font-semibold text-texto" aria-live="polite">
+          <span>Tempo: {String(Math.floor(tempo / 60)).padStart(2, '0')}:{String(tempo % 60).padStart(2, '0')}</span>
+          <span>Erros: {erros}/{limiteErros}</span>
+        </div>
+      </div>
+
       <section className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_minmax(280px,620px)_minmax(0,1fr)]">
           <div className="min-w-0 md:col-start-2">
             {carregando && (
@@ -151,11 +235,13 @@ export default function Home() {
                 valores={tabuleiro}
                 celulasFixas={celulasFixas}
                 situacoes={situacoes}
+                bloqueado={finalizado}
                 blocoLinhas={jogo.bloco_linhas}
                 blocoColunas={jogo.bloco_colunas}
                 celulaSelecionada={celulaSelecionada}
                 aoSelecionar={(linha, coluna) => setCelulaSelecionada([linha, coluna])}
-                aoDigitar={(linha, coluna, numero) => void digitarNumero(linha, coluna, numero)}
+                aoDigitar={digitarNumero}
+                aoConfirmar={(linha, coluna) => void confirmarNumero(linha, coluna)}
               />
             )}
 
@@ -163,6 +249,17 @@ export default function Home() {
               <p className="mt-3 min-h-6 text-center font-semibold text-primaria-escura" role="status">
                 {mensagem}
               </p>
+            )}
+
+            {perdeu && (
+              <div className="mt-4 flex flex-wrap justify-center gap-3">
+                <button className={classeBotao} type="button" onClick={tentarDeNovo}>
+                  Tentar de novo
+                </button>
+                <button className={`${classeBotao} bg-primaria-clara`} type="button" onClick={adicionarVida}>
+                  Adicionar uma vida
+                </button>
+              </div>
             )}
           </div>
 
@@ -182,7 +279,7 @@ export default function Home() {
             >
               Novo jogo
             </button>
-            <button className={classeBotao} type="button" onClick={apagarSelecionada}>
+            <button className={classeBotao} type="button" onClick={apagarSelecionada} disabled={finalizado}>
               Apagar
             </button>
             <button
