@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Content from '../../components/Content/Content'
 import Tabuleiro from '../../components/Tabuleiro/Tabuleiro'
 import {
+  adicionarVida as registrarVidaExtra,
   criarNovoJogo,
   pedirDica,
   reiniciarDicas,
@@ -12,7 +13,7 @@ import {
   type TamanhoSudoku,
 } from '../../services/sudokuApi'
 
-export default function Home() {
+export default function Home({ token }: { token: string | null }) {
   const [tamanho, setTamanho] = useState<TamanhoSudoku>(9)
   const [dificuldade, setDificuldade] = useState<Dificuldade>('facil')
   const [jogo, setJogo] = useState<Jogo | null>(null)
@@ -30,6 +31,7 @@ export default function Home() {
   const [dicasRestantes, setDicasRestantes] = useState(3)
   const verificando = useRef(false)
   const versaoPartida = useRef(0)
+  const ultimaConfiguracao = useRef<string | null>(null)
   const classeSelecao =
     'rounded-jogo border border-borda bg-superficie px-3 py-2 text-texto outline-none transition-colors focus:border-borda-forte focus:ring-2 focus:ring-primaria-clara'
   const classeBotao =
@@ -38,7 +40,7 @@ export default function Home() {
   const carregarJogo = useCallback(async () => {
     const versao = ++versaoPartida.current
     try {
-      const novoJogo = await criarNovoJogo(tamanho, dificuldade)
+      const novoJogo = await criarNovoJogo(tamanho, dificuldade, token)
       if (versao !== versaoPartida.current) return
       setJogo(novoJogo)
       setTabuleiro(novoJogo.tabuleiro.map((linha) => [...linha]))
@@ -62,11 +64,14 @@ export default function Home() {
     } finally {
       if (versao === versaoPartida.current) setCarregando(false)
     }
-  }, [tamanho, dificuldade])
+  }, [tamanho, dificuldade, token])
 
   useEffect(() => {
+    const configuracao = `${tamanho}:${dificuldade}:${token ?? 'visitante'}`
+    if (ultimaConfiguracao.current === configuracao) return
+    ultimaConfiguracao.current = configuracao
     void carregarJogo()
-  }, [carregarJogo])
+  }, [carregarJogo, tamanho, dificuldade, token])
 
   useEffect(() => {
     if (!jogo || carregando || finalizado) return
@@ -100,15 +105,16 @@ export default function Home() {
     const versao = versaoPartida.current
 
     try {
-      const correta = await verificarJogada(jogo.jogo_id, linha, coluna, numero)
+      const resultado = await verificarJogada(jogo.jogo_id, linha, coluna, numero, token)
       if (versao !== versaoPartida.current) return
+      const { correta } = resultado
 
       const novasSituacoes = situacoes.map((valores) => [...valores])
       novasSituacoes[linha][coluna] = correta
       setSituacoes(novasSituacoes)
 
       if (!correta) {
-        const totalErros = erros + 1
+        const totalErros = resultado.erros
         setErros(totalErros)
         if (totalErros >= limiteErros) {
           setFinalizado(true)
@@ -130,10 +136,15 @@ export default function Home() {
         ),
       )
 
-      if (completo && await verificarTabuleiro(jogo.jogo_id, tabuleiro)) {
+      const verificacao = completo
+        ? await verificarTabuleiro(jogo.jogo_id, tabuleiro, token)
+        : null
+      if (verificacao?.completo) {
         if (versao !== versaoPartida.current) return
         setFinalizado(true)
-        setMensagem('Parabéns! Você completou o Sudoku.')
+        setMensagem(verificacao.ranking_elegivel
+          ? 'Parabéns! Você completou o Sudoku. Tempo registrado para o ranking.'
+          : 'Parabéns! Você completou o Sudoku.')
       }
     } catch {
       if (versao !== versaoPartida.current) return
@@ -163,7 +174,7 @@ export default function Home() {
     if (!jogo) return
 
     try {
-      await reiniciarDicas(jogo.jogo_id)
+      await reiniciarDicas(jogo.jogo_id, token)
     } catch {
       setMensagem('Não foi possível reiniciar a partida. Verifique se a API está ligada.')
       return
@@ -182,11 +193,17 @@ export default function Home() {
     setMensagem('Boa sorte! Tente resolver o mesmo tabuleiro novamente.')
   }
 
-  function adicionarVida() {
-    setLimiteErros((atual) => atual + 1)
-    setFinalizado(false)
-    setPerdeu(false)
-    setMensagem('Você ganhou mais uma chance. Continue de onde parou!')
+  async function adicionarVida() {
+    if (!jogo) return
+    try {
+      const novoLimite = await registrarVidaExtra(jogo.jogo_id, token)
+      setLimiteErros(novoLimite)
+      setFinalizado(false)
+      setPerdeu(false)
+      setMensagem('Você ganhou mais uma chance. Continue de onde parou!')
+    } catch {
+      setMensagem('Não foi possível adicionar uma vida.')
+    }
   }
 
   async function usarDica() {
@@ -196,7 +213,7 @@ export default function Home() {
     const versao = versaoPartida.current
 
     try {
-      const dica = await pedirDica(jogo.jogo_id, tabuleiro)
+      const dica = await pedirDica(jogo.jogo_id, tabuleiro, token)
       if (versao !== versaoPartida.current) return
 
       const novoTabuleiro = tabuleiro.map((linha) => [...linha])
@@ -223,7 +240,10 @@ export default function Home() {
         ),
       )
 
-      if (completo && await verificarTabuleiro(jogo.jogo_id, novoTabuleiro)) {
+      const verificacao = completo
+        ? await verificarTabuleiro(jogo.jogo_id, novoTabuleiro, token)
+        : null
+      if (verificacao?.completo) {
         if (versao !== versaoPartida.current) return
         setFinalizado(true)
         setMensagem('Parabéns! Você completou o Sudoku.')
@@ -281,6 +301,13 @@ export default function Home() {
 
       <div className="mb-4 text-center">
         <p className="text-sm text-texto-suave">Digite um número e pressione Enter para confirmar.</p>
+        {jogo && (
+          <p className="mt-1 text-sm text-texto-suave">
+            {jogo.ranking_habilitado
+              ? 'Partida registrada. Dicas e vidas extras a deixam fora do ranking.'
+              : 'Partida como visitante: entre com Google para registrar as próximas partidas.'}
+          </p>
+        )}
         <div className="mt-2 flex justify-center gap-6 font-semibold text-texto" aria-live="polite">
           <span>Tempo: {String(Math.floor(tempo / 60)).padStart(2, '0')}:{String(tempo % 60).padStart(2, '0')}</span>
           <span>Erros: {erros}/{limiteErros}</span>
@@ -319,7 +346,7 @@ export default function Home() {
                 <button className={classeBotao} type="button" onClick={() => void tentarDeNovo()}>
                   Tentar de novo
                 </button>
-                <button className={`${classeBotao} bg-primaria-clara`} type="button" onClick={adicionarVida}>
+                <button className={`${classeBotao} bg-primaria-clara`} type="button" onClick={() => void adicionarVida()}>
                   Adicionar uma vida
                 </button>
               </div>

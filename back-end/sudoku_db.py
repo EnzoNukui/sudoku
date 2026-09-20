@@ -52,6 +52,89 @@ def criar_tabelas():
                     cursor.execute(comando)
 
 
+def salvar_usuario(google_sub, nome, foto_url):
+    with conectar() as conexao:
+        with conexao.cursor() as cursor:
+            cursor.execute(
+                """MERGE INTO SUDOKU_USUARIOS destino
+                   USING (SELECT :google_sub AS GOOGLE_SUB FROM DUAL) origem
+                   ON (destino.GOOGLE_SUB = origem.GOOGLE_SUB)
+                   WHEN MATCHED THEN UPDATE SET NOME = :nome, FOTO_URL = :foto_url
+                   WHEN NOT MATCHED THEN INSERT (GOOGLE_SUB, NOME, FOTO_URL)
+                   VALUES (:google_sub, :nome, :foto_url)""",
+                google_sub=google_sub, nome=nome, foto_url=foto_url,
+            )
+        conexao.commit()
+
+
+def iniciar_partida(partida_id, google_sub, tamanho, dificuldade):
+    with conectar() as conexao:
+        with conexao.cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO SUDOKU_PARTIDAS
+                   (ID, GOOGLE_SUB, TAMANHO, DIFICULDADE)
+                   VALUES (:partida_id, :google_sub, :tamanho, :dificuldade)""",
+                partida_id=partida_id, google_sub=google_sub,
+                tamanho=tamanho, dificuldade=dificuldade,
+            )
+        conexao.commit()
+
+
+def atualizar_partida(partida_id, erros, dicas, vidas_extras, resultado=None, tempo_ms=None):
+    with conectar() as conexao:
+        with conexao.cursor() as cursor:
+            cursor.execute(
+                """UPDATE SUDOKU_PARTIDAS
+                   SET ERROS = :erros, DICAS_USADAS = :dicas,
+                       VIDAS_EXTRAS = :vidas_extras,
+                       RESULTADO = COALESCE(:resultado, RESULTADO),
+                       FINALIZADA_EM = CASE WHEN :resultado IS NULL OR :resultado = 'EM_ANDAMENTO'
+                           THEN NULL ELSE SYSTIMESTAMP END,
+                       TEMPO_MS = :tempo_ms
+                   WHERE ID = :partida_id""",
+                partida_id=partida_id, erros=erros, dicas=dicas,
+                vidas_extras=vidas_extras, resultado=resultado, tempo_ms=tempo_ms,
+            )
+        conexao.commit()
+
+
+def listar_ranking(tamanho, dificuldade, limite=50):
+    with conectar() as conexao:
+        with conexao.cursor() as cursor:
+            cursor.execute(
+                """SELECT POSICAO, NOME, FOTO_URL, TEMPO_MS, ERROS, FINALIZADA_EM
+                   FROM (
+                       SELECT ROW_NUMBER() OVER (
+                                  ORDER BY p.TEMPO_MS, p.FINALIZADA_EM
+                              ) AS POSICAO,
+                              u.NOME, u.FOTO_URL, p.TEMPO_MS, p.ERROS,
+                              p.FINALIZADA_EM
+                       FROM SUDOKU_PARTIDAS p
+                       INNER JOIN SUDOKU_USUARIOS u
+                           ON u.GOOGLE_SUB = p.GOOGLE_SUB
+                       WHERE p.TAMANHO = :tamanho
+                         AND p.DIFICULDADE = :dificuldade
+                         AND p.RESULTADO = 'VITORIA'
+                         AND p.DICAS_USADAS = 0
+                         AND p.VIDAS_EXTRAS = 0
+                   )
+                   WHERE POSICAO <= :limite
+                   ORDER BY POSICAO""",
+                tamanho=tamanho, dificuldade=dificuldade, limite=limite,
+            )
+            return [
+                {
+                    "posicao": linha[0],
+                    "nome": linha[1],
+                    "foto_url": linha[2],
+                    "tempo_ms": linha[3],
+                    "erros": linha[4],
+                    "finalizada_em": linha[5],
+                }
+                for linha in cursor.fetchall()
+            ]
+
+
 if __name__ == "__main__":
     import sys
 

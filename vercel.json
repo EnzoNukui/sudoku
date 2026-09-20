@@ -1,0 +1,12 @@
+{
+  "experimentalServices": {
+    "frontend": {
+      "entrypoint": "front-end/tabuleiro_sudoku",
+      "routePrefix": "/"
+    },
+    "backend": {
+      "entrypoint": "back-end/sudoku_api.py",
+      "routePrefix": "/api"
+    }
+  }
+}
