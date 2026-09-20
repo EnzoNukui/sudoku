@@ -126,12 +126,12 @@ def buscar_jogo(jogo_id):
     return jogo
 
 
-@app.get("/")
+@app.get("/api")
 def verificar_api():
     return {"mensagem": "API do Sudoku funcionando"}
 
 
-@app.post("/auth/google")
+@app.post("/api/auth/google")
 def login_google(dados: CredencialGoogle):
     usuario = usuario_google(f"Bearer {dados.credential}")
     nome = usuario.get("name") or "Jogador"
@@ -140,7 +140,7 @@ def login_google(dados: CredencialGoogle):
     return {"nome": nome, "foto_url": foto}
 
 
-@app.get("/ranking")
+@app.get("/api/ranking")
 def consultar_ranking(
     tamanho: int = Query(default=9),
     dificuldade: str = Query(default="facil"),
@@ -150,7 +150,7 @@ def consultar_ranking(
     return sudoku_db.listar_ranking(tamanho, dificuldade)
 
 
-@app.post("/novo-jogo")
+@app.post("/api/novo-jogo")
 def novo_jogo(dados: NovoJogo, authorization: str | None = Header(default=None)):
     usuario = usuario_google(authorization)
     tabuleiro, solucao = criar_jogo_com_solucao(dados.tamanho, dados.dificuldade)
@@ -191,7 +191,7 @@ def novo_jogo(dados: NovoJogo, authorization: str | None = Header(default=None))
     }
 
 
-@app.post("/dica")
+@app.post("/api/dica")
 def dar_dica(dados: Tabuleiro, authorization: str | None = Header(default=None)):
     jogo = acessar_jogo(dados.jogo_id, authorization)
     if jogo["resultado"] != "EM_ANDAMENTO":
@@ -229,7 +229,7 @@ def dar_dica(dados: Tabuleiro, authorization: str | None = Header(default=None))
     }
 
 
-@app.post("/reiniciar-dicas")
+@app.post("/api/reiniciar-dicas")
 def reiniciar_dicas(dados: Partida, authorization: str | None = Header(default=None)):
     jogo = acessar_jogo(dados.jogo_id, authorization)
     if jogo["resultado"] == "EM_ANDAMENTO":
@@ -249,7 +249,7 @@ def reiniciar_dicas(dados: Partida, authorization: str | None = Header(default=N
     return {"dicas_restantes": 3}
 
 
-@app.post("/adicionar-vida")
+@app.post("/api/adicionar-vida")
 def adicionar_vida(dados: Partida, authorization: str | None = Header(default=None)):
     jogo = acessar_jogo(dados.jogo_id, authorization)
     if jogo["resultado"] != "DERROTA":
@@ -261,7 +261,7 @@ def adicionar_vida(dados: Partida, authorization: str | None = Header(default=No
     return {"limite_erros": jogo["limite_erros"]}
 
 
-@app.post("/verificar-jogada")
+@app.post("/api/verificar-jogada")
 def validar_jogada(dados: Jogada, authorization: str | None = Header(default=None)):
     jogo = acessar_jogo(dados.jogo_id, authorization)
     if jogo["resultado"] != "EM_ANDAMENTO":
@@ -287,7 +287,7 @@ def validar_jogada(dados: Jogada, authorization: str | None = Header(default=Non
     return {"correta": correta, "erros": jogo["erros"]}
 
 
-@app.post("/verificar-tabuleiro")
+@app.post("/api/verificar-tabuleiro")
 def validar_tabuleiro(dados: Tabuleiro, authorization: str | None = Header(default=None)):
     jogo = acessar_jogo(dados.jogo_id, authorization)
     if jogo["resultado"] != "EM_ANDAMENTO":
