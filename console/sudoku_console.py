@@ -3,7 +3,8 @@ import random
 def escolher_tamanho():
     while True:
         print("1 - Sudoku 4x4")
-        print("2 - Sudoku 9x9")
+        print("2 - Sudoku 6x6")
+        print("3 - Sudoku 9x9")
 
         entrada = input("Escolha uma opção: ")
 
@@ -11,11 +12,13 @@ def escolher_tamanho():
             escolha = int(entrada)
 
             if escolha == 1:
-                return 4, 2
+                return 4, (2, 2)
             elif escolha == 2:
-                return 9, 3
+                return 6, (2, 3)
+            elif escolha == 3:
+                return 9, (3, 3)
             else:
-                print("Opção inválida, escolha 1 ou 2.\n")
+                print("Opção inválida, escolha 1, 2 ou 3.\n")
         except ValueError:
             print("Entrada inválida! Digite apenas o número da opção (não deixe em branco).\n")
 
@@ -58,6 +61,8 @@ def criar_tabuleiro(tamanho_tabuleiro):
     
 
 def mostrar_tabuleiro(tabuleiro, tamanho_bloco):
+    bloco_linhas, bloco_colunas = tamanho_bloco
+
     for i in range(len(tabuleiro)):
         for j in range(len(tabuleiro[i])):
             if tabuleiro[i][j] == 0:
@@ -65,13 +70,13 @@ def mostrar_tabuleiro(tabuleiro, tamanho_bloco):
             else:
                 print(tabuleiro[i][j], end=" ")
 
-            if (j + 1) % tamanho_bloco == 0 and j != len(tabuleiro[i]) - 1:
+            if (j + 1) % bloco_colunas == 0 and j != len(tabuleiro[i]) - 1:
                 print("|", end=" ")
 
         print()
 
-        if (i + 1) % tamanho_bloco == 0 and i != len(tabuleiro) - 1:
-            print("-" * (len(tabuleiro) * 2 + tamanho_bloco))
+        if (i + 1) % bloco_linhas == 0 and i != len(tabuleiro) - 1:
+            print("-" * (len(tabuleiro) * 2 + bloco_colunas))
 
 
 
@@ -90,10 +95,11 @@ def verificar_coluna(tabuleiro, coluna, numero):
     return True
 
 def verificar_quadrado(tabuleiro, linha, coluna, numero, tamanho_bloco):
-    inicio_linha = (linha // tamanho_bloco) * tamanho_bloco
-    inicio_coluna = (coluna // tamanho_bloco) * tamanho_bloco
-    for i in range(inicio_linha, inicio_linha + tamanho_bloco):  
-        for j in range(inicio_coluna, inicio_coluna + tamanho_bloco):
+    bloco_linhas, bloco_colunas = tamanho_bloco
+    inicio_linha = (linha // bloco_linhas) * bloco_linhas
+    inicio_coluna = (coluna // bloco_colunas) * bloco_colunas
+    for i in range(inicio_linha, inicio_linha + bloco_linhas):  
+        for j in range(inicio_coluna, inicio_coluna + bloco_colunas):
             if tabuleiro[i][j] == numero:
                 return False
     return True  
