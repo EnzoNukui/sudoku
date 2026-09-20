@@ -79,12 +79,13 @@ export async function verificarJogada(
 export async function verificarTabuleiro(
   jogoId: string,
   tabuleiro: number[][],
+  tempoSegundos: number,
   token: string | null,
 ): Promise<{ completo: boolean; ranking_elegivel: boolean }> {
   const resposta = await fetch(`${API_URL}/verificar-tabuleiro`, {
     method: 'POST',
     headers: cabecalhos(token),
-    body: JSON.stringify({ jogo_id: jogoId, tabuleiro }),
+    body: JSON.stringify({ jogo_id: jogoId, tabuleiro, tempo_segundos: tempoSegundos }),
   })
 
   return tratarResposta<{ completo: boolean; ranking_elegivel: boolean }>(resposta)

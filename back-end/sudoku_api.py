@@ -55,6 +55,7 @@ class Jogada(BaseModel):
 class Tabuleiro(BaseModel):
     jogo_id: str
     tabuleiro: list[list[int]]
+    tempo_segundos: int | None = None
 
 
 class Partida(BaseModel):
@@ -151,11 +152,13 @@ def tempo_partida_ms(jogo):
     return max(1, int((datetime.now(timezone.utc) - inicio).total_seconds() * 1000))
 
 
-def salvar_progresso(jogo, resultado=None):
+def salvar_progresso(jogo, resultado=None, tempo_ms=None):
+    if tempo_ms is None and resultado and resultado != "EM_ANDAMENTO":
+        tempo_ms = tempo_partida_ms(jogo)
     sudoku_db.salvar_progresso(
         jogo,
         resultado,
-        tempo_partida_ms(jogo) if resultado and resultado != "EM_ANDAMENTO" else None,
+        tempo_ms,
     )
 
 
@@ -354,8 +357,11 @@ def validar_tabuleiro(dados: Tabuleiro, authorization: str | None = Header(defau
 
     completo = dados.tabuleiro == jogo["solucao"]
     if completo:
+        if dados.tempo_segundos is not None and dados.tempo_segundos < 0:
+            raise HTTPException(status_code=400, detail="Tempo inválido.")
         jogo["resultado"] = "VITORIA"
-        salvar_progresso(jogo, "VITORIA")
+        tempo_ms = dados.tempo_segundos * 1000 if dados.tempo_segundos is not None else None
+        salvar_progresso(jogo, "VITORIA", tempo_ms)
 
     return {
         "completo": completo,

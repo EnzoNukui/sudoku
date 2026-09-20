@@ -30,6 +30,8 @@ export default function Home({ token }: { token: string | null }) {
   const [limiteErros, setLimiteErros] = useState(3)
   const [dicasRestantes, setDicasRestantes] = useState(3)
   const verificando = useRef(false)
+  const intervaloTempo = useRef<number | null>(null)
+  const tempoAtual = useRef(0)
   const versaoPartida = useRef(0)
   const ultimaConfiguracao = useRef<string | null>(null)
   const classeSelecao =
@@ -52,6 +54,7 @@ export default function Home({ token }: { token: string | null }) {
       )
       setErros(0)
       setTempo(0)
+      tempoAtual.current = 0
       setFinalizado(false)
       setPerdeu(false)
       setLimiteErros(3)
@@ -76,9 +79,27 @@ export default function Home({ token }: { token: string | null }) {
   useEffect(() => {
     if (!jogo || carregando || finalizado) return
 
-    const intervalo = window.setInterval(() => setTempo((atual) => atual + 1), 1000)
-    return () => window.clearInterval(intervalo)
+    const intervalo = window.setInterval(() => {
+      setTempo((atual) => {
+        const proximoTempo = atual + 1
+        tempoAtual.current = proximoTempo
+        return proximoTempo
+      })
+    }, 1000)
+    intervaloTempo.current = intervalo
+
+    return () => {
+      window.clearInterval(intervalo)
+      if (intervaloTempo.current === intervalo) intervaloTempo.current = null
+    }
   }, [jogo, carregando, finalizado])
+
+  function pararTemporizador() {
+    if (intervaloTempo.current !== null) {
+      window.clearInterval(intervaloTempo.current)
+      intervaloTempo.current = null
+    }
+  }
 
   function digitarNumero(linha: number, coluna: number, numero: number) {
     if (celulasFixas[linha]?.[coluna] || !jogo || finalizado || verificando.current) {
@@ -95,7 +116,17 @@ export default function Home({ token }: { token: string | null }) {
     setSituacoes(novasSituacoes)
 
     if (numero !== 0) {
-      void confirmarNumero(linha, coluna, numero, novoTabuleiro)
+      const tabuleiroPreenchido = novoTabuleiro.every((valores) =>
+        valores.every((valor) => valor !== 0),
+      )
+      const tempoFinal = tabuleiroPreenchido ? tempoAtual.current : null
+
+      if (tabuleiroPreenchido) {
+        pararTemporizador()
+        setFinalizado(true)
+      }
+
+      void confirmarNumero(linha, coluna, numero, novoTabuleiro, tempoFinal)
     }
   }
 
@@ -104,6 +135,7 @@ export default function Home({ token }: { token: string | null }) {
     coluna: number,
     numero: number,
     novoTabuleiro: number[][],
+    tempoFinal: number | null,
   ) {
     if (!jogo || finalizado || verificando.current || celulasFixas[linha]?.[coluna]) return
 
@@ -127,6 +159,7 @@ export default function Home({ token }: { token: string | null }) {
           setPerdeu(true)
           setMensagem(`Você atingiu o limite de ${limiteErros} erros.`)
         } else {
+          if (tempoFinal !== null) setFinalizado(false)
           setMensagem('Número incorreto. Corrija a célula digitando outro número.')
         }
         return
@@ -143,7 +176,12 @@ export default function Home({ token }: { token: string | null }) {
       )
 
       const verificacao = completo
-        ? await verificarTabuleiro(jogo.jogo_id, novoTabuleiro, token)
+        ? await verificarTabuleiro(
+          jogo.jogo_id,
+          novoTabuleiro,
+          tempoFinal ?? tempoAtual.current,
+          token,
+        )
         : null
       if (verificacao?.completo) {
         if (versao !== versaoPartida.current) return
@@ -151,9 +189,12 @@ export default function Home({ token }: { token: string | null }) {
         setMensagem(verificacao.ranking_elegivel
           ? 'Parabéns! Você completou o Sudoku. Tempo registrado para o ranking.'
           : 'Parabéns! Você completou o Sudoku.')
+      } else if (tempoFinal !== null) {
+        setFinalizado(false)
       }
     } catch {
       if (versao !== versaoPartida.current) return
+      if (tempoFinal !== null) setFinalizado(false)
       setMensagem('Não foi possível verificar a jogada.')
     } finally {
       if (versao === versaoPartida.current) verificando.current = false
@@ -194,6 +235,7 @@ export default function Home({ token }: { token: string | null }) {
     setLimiteErros(3)
     setDicasRestantes(3)
     setTempo(0)
+    tempoAtual.current = 0
     setFinalizado(false)
     setPerdeu(false)
     setMensagem('Boa sorte! Tente resolver o mesmo tabuleiro novamente.')
@@ -217,6 +259,7 @@ export default function Home({ token }: { token: string | null }) {
 
     verificando.current = true
     const versao = versaoPartida.current
+    let tempoFinal: number | null = null
 
     try {
       const dica = await pedirDica(jogo.jogo_id, tabuleiro, token)
@@ -246,16 +289,29 @@ export default function Home({ token }: { token: string | null }) {
         ),
       )
 
+      if (completo) {
+        tempoFinal = tempoAtual.current
+        pararTemporizador()
+        setFinalizado(true)
+      }
+
       const verificacao = completo
-        ? await verificarTabuleiro(jogo.jogo_id, novoTabuleiro, token)
+        ? await verificarTabuleiro(
+          jogo.jogo_id,
+          novoTabuleiro,
+          tempoFinal ?? tempoAtual.current,
+          token,
+        )
         : null
       if (verificacao?.completo) {
         if (versao !== versaoPartida.current) return
+        pararTemporizador()
         setFinalizado(true)
         setMensagem('Parabéns! Você completou o Sudoku.')
       }
     } catch {
       if (versao !== versaoPartida.current) return
+      if (tempoFinal !== null) setFinalizado(false)
       setMensagem('Não foi possível obter a dica ou não há células disponíveis.')
     } finally {
       if (versao === versaoPartida.current) verificando.current = false
