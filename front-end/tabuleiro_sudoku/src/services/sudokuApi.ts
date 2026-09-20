@@ -29,7 +29,7 @@ export type PosicaoRanking = {
 }
 
 const API_URL = import.meta.env.VITE_API_URL
-  ?? (import.meta.env.PROD ? '/api' : 'http://127.0.0.1:8000')
+  ?? (import.meta.env.PROD ? '/api' : 'http://127.0.0.1:8000/api')
 
 function cabecalhos(token: string | null): HeadersInit {
   return {
