@@ -8,7 +8,6 @@ type TabuleiroProps = {
   celulaSelecionada: [number, number] | null
   aoSelecionar: (linha: number, coluna: number) => void
   aoDigitar: (linha: number, coluna: number, numero: number) => void
-  aoConfirmar: (linha: number, coluna: number) => void
 }
 
 export default function Tabuleiro({
@@ -21,7 +20,6 @@ export default function Tabuleiro({
   celulaSelecionada,
   aoSelecionar,
   aoDigitar,
-  aoConfirmar,
 }: TabuleiroProps) {
   const tamanho = valores.length
 
@@ -76,12 +74,6 @@ export default function Tabuleiro({
               }}
               onClick={(evento) => {
                 if (!fixa && !bloqueado) evento.currentTarget.select()
-              }}
-              onKeyDown={(evento) => {
-                if (evento.key === 'Enter' && !fixa && !bloqueado) {
-                  evento.preventDefault()
-                  aoConfirmar(indiceLinha, indiceColuna)
-                }
               }}
               onChange={(evento) => {
                 const valor = evento.target.value

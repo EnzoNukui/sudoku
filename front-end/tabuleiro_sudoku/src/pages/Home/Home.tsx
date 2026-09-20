@@ -93,13 +93,19 @@ export default function Home({ token }: { token: string | null }) {
     const novasSituacoes = situacoes.map((valores) => [...valores])
     novasSituacoes[linha][coluna] = null
     setSituacoes(novasSituacoes)
+
+    if (numero !== 0) {
+      void confirmarNumero(linha, coluna, numero, novoTabuleiro)
+    }
   }
 
-  async function confirmarNumero(linha: number, coluna: number) {
+  async function confirmarNumero(
+    linha: number,
+    coluna: number,
+    numero: number,
+    novoTabuleiro: number[][],
+  ) {
     if (!jogo || finalizado || verificando.current || celulasFixas[linha]?.[coluna]) return
-
-    const numero = tabuleiro[linha][coluna]
-    if (numero === 0 || situacoes[linha][coluna] !== null) return
 
     verificando.current = true
     const versao = versaoPartida.current
@@ -121,13 +127,13 @@ export default function Home({ token }: { token: string | null }) {
           setPerdeu(true)
           setMensagem(`Você atingiu o limite de ${limiteErros} erros.`)
         } else {
-          setMensagem('Número incorreto. Corrija a célula e pressione Enter novamente.')
+          setMensagem('Número incorreto. Corrija a célula digitando outro número.')
         }
         return
       }
 
       setMensagem('Número correto!')
-      const completo = tabuleiro.every((valores, indiceLinha) =>
+      const completo = novoTabuleiro.every((valores, indiceLinha) =>
         valores.every((valor, indiceColuna) =>
           valor !== 0 && (
             celulasFixas[indiceLinha][indiceColuna] ||
@@ -137,7 +143,7 @@ export default function Home({ token }: { token: string | null }) {
       )
 
       const verificacao = completo
-        ? await verificarTabuleiro(jogo.jogo_id, tabuleiro, token)
+        ? await verificarTabuleiro(jogo.jogo_id, novoTabuleiro, token)
         : null
       if (verificacao?.completo) {
         if (versao !== versaoPartida.current) return
@@ -300,7 +306,7 @@ export default function Home({ token }: { token: string | null }) {
       </section>
 
       <div className="mb-4 text-center">
-        <p className="text-sm text-texto-suave">Digite um número e pressione Enter para confirmar.</p>
+        <p className="text-sm text-texto-suave">Digite um número para verificar a jogada.</p>
         {jogo && (
           <p className="mt-1 text-sm text-texto-suave">
             {jogo.ranking_habilitado
@@ -331,7 +337,6 @@ export default function Home({ token }: { token: string | null }) {
                 celulaSelecionada={celulaSelecionada}
                 aoSelecionar={(linha, coluna) => setCelulaSelecionada([linha, coluna])}
                 aoDigitar={digitarNumero}
-                aoConfirmar={(linha, coluna) => void confirmarNumero(linha, coluna)}
               />
             )}
 

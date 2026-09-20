@@ -39,9 +39,9 @@ export default function Menu({
         client_id: clientId,
         callback: ({ credential }) => {
           void entrarComGoogle(credential)
-            .then(({ nome }) => {
+            .then(({ token, nome }) => {
               setMensagem('')
-              aoEntrar(credential, nome)
+              aoEntrar(token, nome)
             })
             .catch(() => setMensagem('Não foi possível entrar. Confira a configuração da API e do Oracle.'))
         },

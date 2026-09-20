@@ -5,16 +5,39 @@ import Menu from './components/Menu/Menu'
 import Home from './pages/Home/Home'
 import Ranking from './pages/Ranking/Ranking'
 
+type Sessao = {
+  token: string
+  usuario: string
+}
+
+const CHAVE_SESSAO = 'sudoku_sessao'
+
+function carregarSessao(): Sessao | null {
+  try {
+    const sessao = localStorage.getItem(CHAVE_SESSAO)
+    if (!sessao) return null
+    const dados = JSON.parse(sessao) as Partial<Sessao>
+    return typeof dados.token === 'string' && typeof dados.usuario === 'string'
+      ? { token: dados.token, usuario: dados.usuario }
+      : null
+  } catch {
+    localStorage.removeItem(CHAVE_SESSAO)
+    return null
+  }
+}
+
 export default function App() {
-  const [token, setToken] = useState<string | null>(null)
-  const [usuario, setUsuario] = useState<string | null>(null)
+  const [sessao, setSessao] = useState<Sessao | null>(carregarSessao)
+  const token = sessao?.token ?? null
+  const usuario = sessao?.usuario ?? null
   const aoEntrar = useCallback((novoToken: string, nome: string) => {
-    setToken(novoToken)
-    setUsuario(nome)
+    const novaSessao = { token: novoToken, usuario: nome }
+    localStorage.setItem(CHAVE_SESSAO, JSON.stringify(novaSessao))
+    setSessao(novaSessao)
   }, [])
   const aoSair = useCallback(() => {
-    setToken(null)
-    setUsuario(null)
+    localStorage.removeItem(CHAVE_SESSAO)
+    setSessao(null)
   }, [])
 
   return (

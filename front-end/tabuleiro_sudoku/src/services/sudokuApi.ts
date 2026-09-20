@@ -125,14 +125,14 @@ export async function adicionarVida(jogoId: string, token: string | null): Promi
   return resultado.limite_erros
 }
 
-export async function entrarComGoogle(credential: string): Promise<{ nome: string; foto_url: string | null }> {
+export async function entrarComGoogle(credential: string): Promise<{ token: string; nome: string; foto_url: string | null }> {
   const resposta = await fetch(`${API_URL}/auth/google`, {
     method: 'POST',
     headers: cabecalhos(null),
     body: JSON.stringify({ credential }),
   })
 
-  return tratarResposta<{ nome: string; foto_url: string | null }>(resposta)
+  return tratarResposta<{ token: string; nome: string; foto_url: string | null }>(resposta)
 }
 
 export async function buscarRanking(

@@ -1,5 +1,10 @@
 import random
 import os
+import base64
+import hashlib
+import hmac
+import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -25,7 +30,6 @@ load_dotenv(Path(__file__).with_name(".env"))
 
 
 app = FastAPI(title="API do Sudoku")
-jogos = {}
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,19 +65,14 @@ class CredencialGoogle(BaseModel):
     credential: str
 
 
-def usuario_google(authorization):
-    if not authorization:
-        return None
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Autenticação inválida.")
-
+def verificar_credencial_google(credential):
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     if not client_id:
         raise HTTPException(status_code=503, detail="Login Google não configurado na API.")
 
     try:
         dados = id_token.verify_oauth2_token(
-            authorization[7:], google_requests.Request(), client_id
+            credential, google_requests.Request(), client_id
         )
     except (ValueError, RequestException, GoogleAuthError):
         raise HTTPException(status_code=401, detail="Login Google inválido ou expirado.")
@@ -83,25 +82,81 @@ def usuario_google(authorization):
     return dados
 
 
+def codificar_base64(valor):
+    return base64.urlsafe_b64encode(valor).rstrip(b"=").decode("ascii")
+
+
+def decodificar_base64(valor):
+    return base64.urlsafe_b64decode(valor + "=" * (-len(valor) % 4))
+
+
+def criar_token_sessao(usuario):
+    segredo = os.getenv("SESSION_SECRET")
+    if not segredo:
+        raise HTTPException(status_code=503, detail="Sessão não configurada na API.")
+
+    conteudo = json.dumps(
+        {
+            "sub": usuario["sub"],
+            "name": usuario.get("name") or "Jogador",
+            "picture": usuario.get("picture"),
+            "exp": int(time.time()) + 7 * 24 * 60 * 60,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    assinatura = hmac.new(segredo.encode("utf-8"), conteudo, hashlib.sha256).digest()
+    return f"{codificar_base64(conteudo)}.{codificar_base64(assinatura)}"
+
+
+def usuario_sessao(authorization):
+    if not authorization:
+        return None
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Autenticação inválida.")
+
+    segredo = os.getenv("SESSION_SECRET")
+    if not segredo:
+        raise HTTPException(status_code=503, detail="Sessão não configurada na API.")
+
+    try:
+        conteudo_codificado, assinatura_codificada = authorization[7:].split(".", 1)
+        conteudo = decodificar_base64(conteudo_codificado)
+        assinatura = decodificar_base64(assinatura_codificada)
+        assinatura_esperada = hmac.new(
+            segredo.encode("utf-8"), conteudo, hashlib.sha256
+        ).digest()
+        if not hmac.compare_digest(assinatura, assinatura_esperada):
+            raise ValueError
+        usuario = json.loads(conteudo)
+        if not usuario.get("sub") or usuario.get("exp", 0) <= int(time.time()):
+            raise ValueError
+        return usuario
+    except (ValueError, TypeError, json.JSONDecodeError):
+        raise HTTPException(status_code=401, detail="Sessão inválida ou expirada.")
+
+
 def acessar_jogo(jogo_id, authorization):
     jogo = buscar_jogo(jogo_id)
-    usuario = usuario_google(authorization)
+    usuario = usuario_sessao(authorization)
     if jogo["google_sub"] != (usuario["sub"] if usuario else None):
         raise HTTPException(status_code=403, detail="Esta partida pertence a outro usuário.")
     return jogo
 
 
 def tempo_partida_ms(jogo):
-    return max(1, int((datetime.now(timezone.utc) - jogo["iniciada_em"]).total_seconds() * 1000))
+    inicio = jogo["iniciada_em"]
+    if inicio.tzinfo is None:
+        inicio = inicio.replace(tzinfo=timezone.utc)
+    return max(1, int((datetime.now(timezone.utc) - inicio).total_seconds() * 1000))
 
 
 def salvar_progresso(jogo, resultado=None):
-    if jogo["google_sub"]:
-        sudoku_db.atualizar_partida(
-            jogo["partida_id"], jogo["erros"], len(jogo["dicas_usadas"]),
-            jogo["vidas_extras"], resultado,
-            tempo_partida_ms(jogo) if resultado and resultado != "EM_ANDAMENTO" else None,
-        )
+    sudoku_db.salvar_progresso(
+        jogo,
+        resultado,
+        tempo_partida_ms(jogo) if resultado and resultado != "EM_ANDAMENTO" else None,
+    )
 
 
 def validar_formato_tabuleiro(tabuleiro):
@@ -118,7 +173,7 @@ def validar_formato_tabuleiro(tabuleiro):
 
 
 def buscar_jogo(jogo_id):
-    jogo = jogos.get(jogo_id)
+    jogo = sudoku_db.buscar_jogo(jogo_id)
 
     if jogo is None:
         raise HTTPException(status_code=404, detail="Partida não encontrada.")
@@ -133,11 +188,11 @@ def verificar_api():
 
 @app.post("/api/auth/google")
 def login_google(dados: CredencialGoogle):
-    usuario = usuario_google(f"Bearer {dados.credential}")
+    usuario = verificar_credencial_google(dados.credential)
     nome = usuario.get("name") or "Jogador"
     foto = usuario.get("picture")
     sudoku_db.salvar_usuario(usuario["sub"], nome, foto)
-    return {"nome": nome, "foto_url": foto}
+    return {"token": criar_token_sessao(usuario), "nome": nome, "foto_url": foto}
 
 
 @app.get("/api/ranking")
@@ -152,7 +207,7 @@ def consultar_ranking(
 
 @app.post("/api/novo-jogo")
 def novo_jogo(dados: NovoJogo, authorization: str | None = Header(default=None)):
-    usuario = usuario_google(authorization)
+    usuario = usuario_sessao(authorization)
     tabuleiro, solucao = criar_jogo_com_solucao(dados.tamanho, dados.dificuldade)
     bloco_linhas, bloco_colunas = obter_tamanho_bloco(dados.tamanho)
     jogo_id = str(uuid4())
@@ -164,7 +219,8 @@ def novo_jogo(dados: NovoJogo, authorization: str | None = Header(default=None))
         )
         sudoku_db.iniciar_partida(partida_id, usuario["sub"], dados.tamanho, dados.dificuldade)
 
-    jogos[jogo_id] = {
+    jogo = {
+        "jogo_id": jogo_id,
         "tabuleiro_inicial": [linha.copy() for linha in tabuleiro],
         "solucao": solucao,
         "dicas_usadas": set(),
@@ -178,6 +234,7 @@ def novo_jogo(dados: NovoJogo, authorization: str | None = Header(default=None))
         "limite_erros": 3,
         "resultado": "EM_ANDAMENTO",
     }
+    sudoku_db.criar_jogo(jogo)
 
     return {
         "jogo_id": jogo_id,
@@ -246,6 +303,7 @@ def reiniciar_dicas(dados: Partida, authorization: str | None = Header(default=N
     jogo["vidas_extras"] = 0
     jogo["limite_erros"] = 3
     jogo["resultado"] = "EM_ANDAMENTO"
+    salvar_progresso(jogo, "EM_ANDAMENTO")
     return {"dicas_restantes": 3}
 
 
