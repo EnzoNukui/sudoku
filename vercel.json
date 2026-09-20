@@ -1,12 +1,27 @@
 {
-  "experimentalServices": {
+  "services": {
     "frontend": {
-      "entrypoint": "front-end/tabuleiro_sudoku",
-      "routePrefix": "/"
+      "root": "front-end/tabuleiro_sudoku",
+      "framework": "vite"
     },
     "backend": {
-      "entrypoint": "back-end/sudoku_api.py",
-      "routePrefix": "/api"
+      "root": "back-end",
+      "entrypoint": "sudoku_api:app",
+      "framework": "fastapi"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "frontend"
+      }
+    }
+  ]
 }
