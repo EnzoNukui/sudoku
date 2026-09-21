@@ -26,6 +26,12 @@ Aplicação full stack de Sudoku com geração dinâmica de partidas, múltiplos
 
 ---
 
+## Status
+
+O projeto está funcional e disponível online. Novas melhorias podem ser adicionadas conforme a evolução da aplicação.
+
+**Demo:** https://ende-sudoku.vercel.app/
+
 ## Sobre o projeto
 
 Este projeto começou como uma implementação de **Sudoku em Python executada pelo terminal** e evoluiu para uma aplicação web completa, conectando **frontend, backend, banco de dados, autenticação e deploy**.
@@ -395,14 +401,6 @@ O desenvolvimento deste projeto envolveu diferentes etapas de uma aplicação fu
 - modelagem de usuários, partidas e ranking;
 - uso de variáveis de ambiente;
 - deploy de frontend e backend em uma mesma aplicação.
-
----
-
-## Status
-
-O projeto está funcional e disponível online. Novas melhorias podem ser adicionadas conforme a evolução da aplicação.
-
-**Demo:** https://ende-sudoku.vercel.app/
 
 ---
 
