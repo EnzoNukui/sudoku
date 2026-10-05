@@ -5,6 +5,7 @@ import random
 import time
 import threading
 from pathlib import Path
+from uuid import uuid4
 
 import oracledb
 
@@ -213,6 +214,14 @@ def atualizar_jogo(jogo):
 
 def salvar_progresso(jogo, resultado=None, tempo_ms=None):
     dicas = json.dumps([list(posicao) for posicao in sorted(jogo["dicas_usadas"])])
+    resultado_final = resultado in ("VITORIA", "DERROTA")
+    nova_partida = bool(jogo["google_sub"]) and resultado_final and not jogo["partida_id"]
+
+    # O histórico só é criado quando a partida termina. O ID passa a ser
+    # associado ao jogo operacional antes de salvar o estado no Oracle.
+    if nova_partida:
+        jogo["partida_id"] = str(uuid4())
+
     with conectar() as conexao:
         with conexao.cursor() as cursor:
             cursor.execute(
@@ -228,22 +237,38 @@ def salvar_progresso(jogo, resultado=None, tempo_ms=None):
                 limite_erros=jogo["limite_erros"], resultado_jogo=jogo["resultado"],
             )
 
-            if jogo["google_sub"]:
-                cursor.execute(
-                    """UPDATE SUDOKU_PARTIDAS
-                       SET ERROS = :erros, DICAS_USADAS = :dicas,
-                           VIDAS_EXTRAS = :vidas_extras,
-                           RESULTADO = COALESCE(:resultado_partida, RESULTADO),
-                           FINALIZADA_EM = CASE
-                               WHEN :resultado_partida IS NULL
-                                 OR :resultado_partida = 'EM_ANDAMENTO'
-                               THEN NULL ELSE SYSTIMESTAMP END,
-                           TEMPO_MS = :tempo_ms
-                       WHERE ID = :partida_id""",
-                    partida_id=jogo["partida_id"], erros=jogo["erros"],
-                    dicas=len(jogo["dicas_usadas"]), vidas_extras=jogo["vidas_extras"],
-                    resultado_partida=resultado, tempo_ms=tempo_ms,
-                )
+            if jogo["google_sub"] and resultado_final:
+                if nova_partida:
+                    cursor.execute(
+                        """INSERT INTO SUDOKU_PARTIDAS
+                           (ID, GOOGLE_SUB, TAMANHO, DIFICULDADE, INICIADA_EM,
+                            FINALIZADA_EM, TEMPO_MS, ERROS, DICAS_USADAS,
+                            VIDAS_EXTRAS, RESULTADO)
+                           VALUES
+                           (:partida_id, :google_sub, :tamanho, :dificuldade,
+                            :iniciada_em, SYSTIMESTAMP, :tempo_ms, :erros,
+                            :dicas, :vidas_extras, :resultado)""",
+                        partida_id=jogo["partida_id"], google_sub=jogo["google_sub"],
+                        tamanho=jogo["tamanho"], dificuldade=jogo["dificuldade"],
+                        iniciada_em=jogo["iniciada_em"], tempo_ms=tempo_ms,
+                        erros=jogo["erros"], dicas=len(jogo["dicas_usadas"]),
+                        vidas_extras=jogo["vidas_extras"], resultado=resultado,
+                    )
+                else:
+                    # Compatibilidade com partidas antigas que foram criadas
+                    # antes desta regra e ainda possuem um ID de histórico.
+                    cursor.execute(
+                        """UPDATE SUDOKU_PARTIDAS
+                           SET ERROS = :erros, DICAS_USADAS = :dicas,
+                               VIDAS_EXTRAS = :vidas_extras,
+                               RESULTADO = :resultado,
+                               FINALIZADA_EM = SYSTIMESTAMP,
+                               TEMPO_MS = :tempo_ms
+                           WHERE ID = :partida_id""",
+                        partida_id=jogo["partida_id"], erros=jogo["erros"],
+                        dicas=len(jogo["dicas_usadas"]), vidas_extras=jogo["vidas_extras"],
+                        resultado=resultado, tempo_ms=tempo_ms,
+                    )
         conexao.commit()
 
 

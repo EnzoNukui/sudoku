@@ -214,13 +214,11 @@ def novo_jogo(dados: NovoJogo, authorization: str | None = Header(default=None))
     tabuleiro, solucao = criar_jogo_com_solucao(dados.tamanho, dados.dificuldade)
     bloco_linhas, bloco_colunas = obter_tamanho_bloco(dados.tamanho)
     jogo_id = str(uuid4())
-    partida_id = str(uuid4()) if usuario else None
 
     if usuario:
         sudoku_db.salvar_usuario(
             usuario["sub"], usuario.get("name") or "Jogador", usuario.get("picture")
         )
-        sudoku_db.iniciar_partida(partida_id, usuario["sub"], dados.tamanho, dados.dificuldade)
 
     jogo = {
         "jogo_id": jogo_id,
@@ -228,7 +226,7 @@ def novo_jogo(dados: NovoJogo, authorization: str | None = Header(default=None))
         "solucao": solucao,
         "dicas_usadas": set(),
         "google_sub": usuario["sub"] if usuario else None,
-        "partida_id": partida_id,
+        "partida_id": None,
         "tamanho": dados.tamanho,
         "dificuldade": dados.dificuldade,
         "iniciada_em": datetime.now(timezone.utc),
@@ -294,12 +292,7 @@ def reiniciar_dicas(dados: Partida, authorization: str | None = Header(default=N
     jogo = acessar_jogo(dados.jogo_id, authorization)
     if jogo["resultado"] == "EM_ANDAMENTO":
         raise HTTPException(status_code=409, detail="A partida ainda está em andamento.")
-    nova_partida_id = str(uuid4()) if jogo["google_sub"] else None
-    if nova_partida_id:
-        sudoku_db.iniciar_partida(
-            nova_partida_id, jogo["google_sub"], jogo["tamanho"], jogo["dificuldade"]
-        )
-    jogo["partida_id"] = nova_partida_id
+    jogo["partida_id"] = None
     jogo["dicas_usadas"].clear()
     jogo["iniciada_em"] = datetime.now(timezone.utc)
     jogo["erros"] = 0
