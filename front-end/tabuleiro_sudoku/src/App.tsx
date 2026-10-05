@@ -1,42 +1,35 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import Footer from './components/Footer/Footer'
 import Menu from './components/Menu/Menu'
 import Home from './pages/Home/Home'
 import Ranking from './pages/Ranking/Ranking'
-
-type Sessao = {
-  token: string
-  usuario: string
-}
-
-const CHAVE_SESSAO = 'sudoku_sessao'
-
-function carregarSessao(): Sessao | null {
-  try {
-    const sessao = localStorage.getItem(CHAVE_SESSAO)
-    if (!sessao) return null
-    const dados = JSON.parse(sessao) as Partial<Sessao>
-    return typeof dados.token === 'string' && typeof dados.usuario === 'string'
-      ? { token: dados.token, usuario: dados.usuario }
-      : null
-  } catch {
-    localStorage.removeItem(CHAVE_SESSAO)
-    return null
-  }
-}
+import {
+  carregarSessao,
+  EVENTO_SESSAO_EXPIRADA,
+  removerSessao,
+  salvarSessao,
+  type Sessao,
+} from './services/sudokuApi'
 
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(carregarSessao)
   const token = sessao?.token ?? null
   const usuario = sessao?.usuario ?? null
+
+  useEffect(() => {
+    const encerrarSessaoExpirada = () => setSessao(null)
+    window.addEventListener(EVENTO_SESSAO_EXPIRADA, encerrarSessaoExpirada)
+    return () => window.removeEventListener(EVENTO_SESSAO_EXPIRADA, encerrarSessaoExpirada)
+  }, [])
+
   const aoEntrar = useCallback((novoToken: string, nome: string) => {
     const novaSessao = { token: novoToken, usuario: nome }
-    localStorage.setItem(CHAVE_SESSAO, JSON.stringify(novaSessao))
+    salvarSessao(novaSessao)
     setSessao(novaSessao)
   }, [])
   const aoSair = useCallback(() => {
-    localStorage.removeItem(CHAVE_SESSAO)
+    removerSessao()
     setSessao(null)
   }, [])
 

@@ -1,6 +1,11 @@
 export type TamanhoSudoku = 4 | 6 | 9
 export type Dificuldade = 'facil' | 'medio' | 'dificil'
 
+export type Sessao = {
+  token: string
+  usuario: string
+}
+
 export type Jogo = {
   jogo_id: string
   tamanho: TamanhoSudoku
@@ -30,16 +35,67 @@ export type PosicaoRanking = {
 
 const API_URL = import.meta.env.VITE_API_URL
   ?? (import.meta.env.PROD ? '/api' : 'http://127.0.0.1:8000/api')
+const CHAVE_SESSAO = 'sudoku_sessao'
+export const EVENTO_SESSAO_EXPIRADA = 'sudoku-sessao-expirada'
+
+function tokenExpirado(token: string) {
+  try {
+    const [conteudo] = token.split('.')
+    if (!conteudo) return true
+
+    const base64 = conteudo.replace(/-/g, '+').replace(/_/g, '/')
+    const base64Completo = base64.padEnd(base64.length + (-base64.length % 4), '=')
+    const dados = JSON.parse(atob(base64Completo)) as { exp?: number }
+    return typeof dados.exp !== 'number' || dados.exp <= Date.now() / 1000
+  } catch {
+    return true
+  }
+}
+
+export function carregarSessao(): Sessao | null {
+  try {
+    const sessao = localStorage.getItem(CHAVE_SESSAO)
+    if (!sessao) return null
+
+    const dados = JSON.parse(sessao) as Partial<Sessao>
+    if (
+      typeof dados.token !== 'string'
+      || typeof dados.usuario !== 'string'
+      || tokenExpirado(dados.token)
+    ) {
+      localStorage.removeItem(CHAVE_SESSAO)
+      return null
+    }
+
+    return { token: dados.token, usuario: dados.usuario }
+  } catch {
+    localStorage.removeItem(CHAVE_SESSAO)
+    return null
+  }
+}
+
+export function salvarSessao(sessao: Sessao) {
+  localStorage.setItem(CHAVE_SESSAO, JSON.stringify(sessao))
+}
+
+export function removerSessao(notificar = false) {
+  localStorage.removeItem(CHAVE_SESSAO)
+  if (notificar) window.dispatchEvent(new Event(EVENTO_SESSAO_EXPIRADA))
+}
 
 function cabecalhos(token: string | null): HeadersInit {
+  const tokenValido = token && !tokenExpirado(token) ? token : null
+  if (token && !tokenValido) removerSessao(true)
+
   return {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(tokenValido ? { Authorization: `Bearer ${tokenValido}` } : {}),
   }
 }
 
 async function tratarResposta<T>(resposta: Response): Promise<T> {
   if (!resposta.ok) {
+    if (resposta.status === 401) removerSessao(true)
     throw new Error('Não foi possível comunicar com a API do Sudoku.')
   }
 
