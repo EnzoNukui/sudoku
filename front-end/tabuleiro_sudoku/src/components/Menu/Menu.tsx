@@ -10,6 +10,7 @@ type GoogleIdentity = {
         auto_select?: boolean
         callback: (resposta: { credential: string }) => void
       }) => void
+      prompt: () => void
       renderButton: (elemento: HTMLElement, opcoes: { theme: string; size: string; text: string }) => void
       disableAutoSelect: () => void
     }
@@ -57,6 +58,7 @@ export default function Menu({
       google.accounts.id.renderButton(botaoGoogle.current, {
         theme: 'outline', size: 'large', text: 'signin_with',
       })
+      if (avisoSessao) google.accounts.id.prompt()
     }
 
     const existente = document.querySelector<HTMLScriptElement>('script[data-google-identity]')
