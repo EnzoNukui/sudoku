@@ -5,7 +5,11 @@ import { entrarComGoogle } from '../../services/sudokuApi'
 type GoogleIdentity = {
   accounts: {
     id: {
-      initialize: (opcoes: { client_id: string; callback: (resposta: { credential: string }) => void }) => void
+      initialize: (opcoes: {
+        client_id: string
+        auto_select?: boolean
+        callback: (resposta: { credential: string }) => void
+      }) => void
       renderButton: (elemento: HTMLElement, opcoes: { theme: string; size: string; text: string }) => void
       disableAutoSelect: () => void
     }
@@ -39,6 +43,7 @@ export default function Menu({
       if (!google || !botaoGoogle.current) return
       google.accounts.id.initialize({
         client_id: clientId,
+        auto_select: Boolean(avisoSessao),
         callback: ({ credential }) => {
           void entrarComGoogle(credential)
             .then(({ token, nome }) => {
@@ -68,7 +73,7 @@ export default function Menu({
     script.addEventListener('load', configurarBotao, { once: true })
     document.head.appendChild(script)
     return () => script.removeEventListener('load', configurarBotao)
-  }, [clientId, usuario, aoEntrar])
+  }, [clientId, usuario, avisoSessao, aoEntrar])
 
   return (
     <header className="px-4 pt-8 pb-4 text-center">

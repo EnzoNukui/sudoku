@@ -36,6 +36,7 @@ export type PosicaoRanking = {
 const API_URL = import.meta.env.VITE_API_URL
   ?? (import.meta.env.PROD ? '/api' : 'http://127.0.0.1:8000/api')
 const CHAVE_SESSAO = 'sudoku_sessao'
+const CHAVE_SESSAO_EXPIRADA = 'sudoku_sessao_expirada'
 export const EVENTO_SESSAO_EXPIRADA = 'sudoku-sessao-expirada'
 
 function tokenExpirado(token: string) {
@@ -64,14 +65,24 @@ export function carregarSessao(): Sessao | null {
       || tokenExpirado(dados.token)
     ) {
       localStorage.removeItem(CHAVE_SESSAO)
+      localStorage.setItem(CHAVE_SESSAO_EXPIRADA, '1')
       return null
     }
 
     return { token: dados.token, usuario: dados.usuario }
   } catch {
     localStorage.removeItem(CHAVE_SESSAO)
+    localStorage.setItem(CHAVE_SESSAO_EXPIRADA, '1')
     return null
   }
+}
+
+export function carregarAvisoSessao(): string {
+  const expirou = localStorage.getItem(CHAVE_SESSAO_EXPIRADA) === '1'
+  localStorage.removeItem(CHAVE_SESSAO_EXPIRADA)
+  return expirou
+    ? 'Sua sessão expirou. O Google tentará renovar o login para registrar a partida no ranking.'
+    : ''
 }
 
 export function salvarSessao(sessao: Sessao) {
@@ -190,16 +201,6 @@ export async function entrarComGoogle(credential: string): Promise<{ token: stri
   })
 
   return tratarResposta<{ token: string; nome: string; foto_url: string | null }>(resposta)
-}
-
-export async function renovarSessao(token: string): Promise<string> {
-  const resposta = await fetch(`${API_URL}/auth/renovar`, {
-    method: 'POST',
-    headers: cabecalhos(token),
-  })
-
-  const resultado = await tratarResposta<{ token: string }>(resposta)
-  return resultado.token
 }
 
 export async function buscarRanking(
