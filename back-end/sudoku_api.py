@@ -200,6 +200,14 @@ def login_google(dados: CredencialGoogle):
     return {"token": criar_token_sessao(usuario), "nome": nome, "foto_url": foto}
 
 
+@app.post("/api/auth/renovar")
+def renovar_sessao(authorization: str | None = Header(default=None)):
+    usuario = usuario_sessao(authorization)
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Sessão não encontrada.")
+    return {"token": criar_token_sessao(usuario)}
+
+
 @app.get("/api/ranking")
 def consultar_ranking(
     tamanho: int = Query(default=9),

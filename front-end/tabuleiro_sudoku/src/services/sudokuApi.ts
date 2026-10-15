@@ -192,6 +192,16 @@ export async function entrarComGoogle(credential: string): Promise<{ token: stri
   return tratarResposta<{ token: string; nome: string; foto_url: string | null }>(resposta)
 }
 
+export async function renovarSessao(token: string): Promise<string> {
+  const resposta = await fetch(`${API_URL}/auth/renovar`, {
+    method: 'POST',
+    headers: cabecalhos(token),
+  })
+
+  const resultado = await tratarResposta<{ token: string }>(resposta)
+  return resultado.token
+}
+
 export async function buscarRanking(
   tamanho: TamanhoSudoku,
   dificuldade: Dificuldade,
