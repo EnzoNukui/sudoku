@@ -224,21 +224,10 @@ def salvar_progresso(jogo, resultado=None, tempo_ms=None):
 
     with conectar() as conexao:
         with conexao.cursor() as cursor:
-            cursor.execute(
-                """UPDATE SUDOKU_JOGOS
-                   SET PARTIDA_ID = :partida_id, DICAS_USADAS = :dicas_usadas,
-                       INICIADA_EM = :iniciada_em, ERROS = :erros,
-                       VIDAS_EXTRAS = :vidas_extras, LIMITE_ERROS = :limite_erros,
-                       RESULTADO = :resultado_jogo
-                   WHERE ID = :jogo_id""",
-                jogo_id=jogo["jogo_id"], partida_id=jogo["partida_id"],
-                dicas_usadas=dicas, iniciada_em=jogo["iniciada_em"],
-                erros=jogo["erros"], vidas_extras=jogo["vidas_extras"],
-                limite_erros=jogo["limite_erros"], resultado_jogo=jogo["resultado"],
-            )
-
             if jogo["google_sub"] and resultado_final:
                 if nova_partida:
+                    # O registro pai precisa existir antes de associar o ID
+                    # ao jogo, pois SUDOKU_JOGOS possui uma chave estrangeira.
                     cursor.execute(
                         """INSERT INTO SUDOKU_PARTIDAS
                            (ID, GOOGLE_SUB, TAMANHO, DIFICULDADE, INICIADA_EM,
@@ -269,6 +258,19 @@ def salvar_progresso(jogo, resultado=None, tempo_ms=None):
                         dicas=len(jogo["dicas_usadas"]), vidas_extras=jogo["vidas_extras"],
                         resultado=resultado, tempo_ms=tempo_ms,
                     )
+
+            cursor.execute(
+                """UPDATE SUDOKU_JOGOS
+                   SET PARTIDA_ID = :partida_id, DICAS_USADAS = :dicas_usadas,
+                       INICIADA_EM = :iniciada_em, ERROS = :erros,
+                       VIDAS_EXTRAS = :vidas_extras, LIMITE_ERROS = :limite_erros,
+                       RESULTADO = :resultado_jogo
+                   WHERE ID = :jogo_id""",
+                jogo_id=jogo["jogo_id"], partida_id=jogo["partida_id"],
+                dicas_usadas=dicas, iniciada_em=jogo["iniciada_em"],
+                erros=jogo["erros"], vidas_extras=jogo["vidas_extras"],
+                limite_erros=jogo["limite_erros"], resultado_jogo=jogo["resultado"],
+            )
         conexao.commit()
 
 
