@@ -101,7 +101,9 @@ def criar_token_sessao(usuario):
             "sub": usuario["sub"],
             "name": usuario.get("name") or "Jogador",
             "picture": usuario.get("picture"),
-            "exp": int(time.time()) + 7 * 24 * 60 * 60,
+            # Mantém o login ativo por tempo suficiente para uma sequência
+            # de partidas, sem deixar a sessão permanente.
+            "exp": int(time.time()) + 30 * 24 * 60 * 60,
         },
         separators=(",", ":"),
         sort_keys=True,

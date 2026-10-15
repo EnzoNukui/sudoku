@@ -14,11 +14,15 @@ import {
 
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(carregarSessao)
+  const [avisoSessao, setAvisoSessao] = useState('')
   const token = sessao?.token ?? null
   const usuario = sessao?.usuario ?? null
 
   useEffect(() => {
-    const encerrarSessaoExpirada = () => setSessao(null)
+    const encerrarSessaoExpirada = () => {
+      setSessao(null)
+      setAvisoSessao('Sua sessão expirou. Entre novamente com o Google para registrar a partida no ranking.')
+    }
     window.addEventListener(EVENTO_SESSAO_EXPIRADA, encerrarSessaoExpirada)
     return () => window.removeEventListener(EVENTO_SESSAO_EXPIRADA, encerrarSessaoExpirada)
   }, [])
@@ -26,6 +30,7 @@ export default function App() {
   const aoEntrar = useCallback((novoToken: string, nome: string) => {
     const novaSessao = { token: novoToken, usuario: nome }
     salvarSessao(novaSessao)
+    setAvisoSessao('')
     setSessao(novaSessao)
   }, [])
   const aoSair = useCallback(() => {
@@ -35,7 +40,12 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Menu usuario={usuario} aoEntrar={aoEntrar} aoSair={aoSair} />
+      <Menu
+        usuario={usuario}
+        avisoSessao={avisoSessao}
+        aoEntrar={aoEntrar}
+        aoSair={aoSair}
+      />
       <Routes>
         <Route path="/" element={<Home key={token ?? 'visitante'} token={token} />} />
         <Route path="/ranking" element={<Ranking />} />

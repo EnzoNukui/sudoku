@@ -18,10 +18,12 @@ function googleIdentity(): GoogleIdentity | undefined {
 
 export default function Menu({
   usuario,
+  avisoSessao,
   aoEntrar,
   aoSair,
 }: {
   usuario: string | null
+  avisoSessao: string
   aoEntrar: (token: string, nome: string) => void
   aoSair: () => void
 }) {
@@ -92,6 +94,7 @@ export default function Menu({
         </NavLink>
       </nav>
       <div className="mt-4 flex flex-col items-center gap-2">
+        {avisoSessao && <p className="max-w-md text-sm text-amber-700" role="status">{avisoSessao}</p>}
         {usuario ? (
           <div className="flex items-center gap-3 text-sm">
             <span>Jogando como {usuario}</span>
